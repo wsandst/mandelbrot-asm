@@ -51,9 +51,18 @@ section .bss
         jge %%printDigits
 %endmacro
 
+%macro write 3:
+        mov       rax, SYS_WRITE
+        mov       rdi, %1
+        mov       rsi, %2
+        mov       rdx, %3
+        syscall
+%endmacro
+
 STDIN equ 0
 STDOUT equ 1
 
 SYS_READ equ 0
 SYS_WRITE equ 1
+SYS_OPEN equ 2
 SYS_EXIT equ 60
