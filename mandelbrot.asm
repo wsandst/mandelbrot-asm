@@ -6,26 +6,29 @@
 ; Include helper file
 %include "helpers.asm"
 
-WIDTH equ 500
-HEIGHT equ 500
+; Settings
+WIDTH equ 300
+HEIGHT equ 300
 
-ITERATIONS equ 200
+MAX_ITERATIONS equ 30
 
 ; Main program
 section   .data
-        msg:  db        "Generating mandelbrot"      ; note the newline at the end
-        msglen:  equ $-msg
+        msg:  db        "Generated mandelbrot", 10
+        msglen: equ $-msg
         newline: db 10
-        imageheader: db "P6", 10, "500 500", 10, "255", 10
+        imageheader: db "P6", 10, "300 300", 10, "255", 10
         imageheaderlen: equ $-imageheader
         outputfilename: db "output.ppm", 0
         outputfilenamelen: equ $-outputfilename
 
+        image_array: TIMES WIDTH*HEIGHT*3 db 0
+        image_array_ptr: dq 0
         image_value: db 0
         placeholder: db 255
 
-        image_widthf: dq 500.0
-        image_heightf: dq 500.0
+        image_widthf: dq 300.0
+        image_heightf: dq 300.0
         view_x: dq -2.25
         view_width: dq 3.0
         view_y: dq -1.5
@@ -50,45 +53,48 @@ section   .text
         global    _main
 
 main:   
-        print msg, msglen
+        ; generate a mandelbrot image
+        call _generate_image
 
-        print newline, 1
-
-        call _openfile
+        ; write a ppm image to file, with the image_array values
+        openfile outputfilename, filehandle
         mov [filehandle], rax
 
         write [filehandle], imageheader, imageheaderlen
+        write [filehandle], image_array, WIDTH*HEIGHT*3
 
-        call _generate_image
-
-        print newline, 1
+        print msg, msglen
 
         exit 0
-
-_openfile:
-        mov rax, SYS_OPEN ; system call for open
-        mov rdi, outputfilename
-        mov rsi, 577 ; flags
-        mov rdx, 0644o ; mode. read and write
-        syscall
-        ret
 
 _generate_image:
         mov r12, 0 ; r12 = x
         mov r13, -1 ; r13 = y
+        xor rax, rax
+        mov rax, image_array ; Image array pointer
+        mov [image_array_ptr], rax
         loopY:
                 mov r12, 0
-                inc r13
+                inc r13 ; y++
                 cmp r13, WIDTH
                 jge loopEnd
                 jmp loopX
         loopX:
                 call _calculate_pos
                 call _iterate_mandelbrot
-                write [filehandle], image_value, 1
-                write [filehandle], image_value, 1
-                write [filehandle], image_value, 1
-                inc r12
+
+                ; Add color
+                mov rax, [image_array_ptr]
+                mov bl, [image_value]
+                mov byte [rax], bl
+                inc rax;
+                mov byte [rax], bl
+                inc rax;
+                mov byte [rax], bl
+                inc rax;
+                mov [image_array_ptr], rax
+
+                inc r12 ; x++
                 cmp r12, HEIGHT
                 jge loopY
                 jmp loopX
@@ -96,17 +102,16 @@ _generate_image:
         ret
 
 _calculate_pos: ; Convert x = r12, y = 13, into the proper mandelbrot range
-        ; float(x) / image_widthf * viewwidth + view_x
+
+        ; x = float(x) / image_widthf * view_height + view_x
         cvtsi2sd xmm0, r12d ; convert x to float
         movsd [x], xmm0
-
-        ; This part seems to work
         divsd xmm0, [image_widthf] ; / image_widthf
         mulsd xmm0, [view_width]  ; * view_width
         addsd xmm0, [view_x] ; + view_x
         movsd [x], xmm0
 
-
+        ; y = float(y) / image_heightf * view_height + view_y
         pxor xmm0, xmm0
         cvtsi2sd xmm0, r13d ; convert y to float
         divsd xmm0, [image_heightf] ; / image_heightf
@@ -115,7 +120,6 @@ _calculate_pos: ; Convert x = r12, y = 13, into the proper mandelbrot range
         movsd [y], xmm0
 
         ret
-        
                 
 
 _iterate_mandelbrot:
@@ -160,19 +164,18 @@ _iterate_mandelbrot:
                 addsd xmm0, [u2] ; + u2
                 addsd xmm0, [v2] ; + v2
                 movsd xmm1, [c16]   
-
                 comisd xmm0, xmm1   
                 jae isoutside
 
-                cmp r11, ITERATIONS
+                cmp r11, MAX_ITERATIONS ; is the iteration count above MAX_ITERATIONS? Then stop
                 jge isinside
 
                 jmp iterateloop
         isinside:
-                mov rax, 255
+                mov rax, 0
                 mov [image_value], rax
                 ret
         isoutside:
-                mov rax, 0
+                mov rax, 255
                 mov [image_value], rax
                 ret

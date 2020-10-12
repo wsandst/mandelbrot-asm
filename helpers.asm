@@ -22,7 +22,7 @@ section .bss
 ; Prints the value of RAX as a base 10 number
     mov rax, %1
     mov r8, numberDigits
-    mov r10, numberDigits ; Start of digit pointer
+    mov r9, numberDigits ; Start of digit pointer
     %%isolateDigitsLoop:
         ; rax = rax / 10. rdx is the remainder
         mov rcx, 10
@@ -47,8 +47,17 @@ section .bss
 
         dec r8          ; Decrement pointer pos
 
-        cmp r8, r10
+        cmp r8, r9
         jge %%printDigits
+%endmacro
+
+%macro openfile 2:
+        mov rax, SYS_OPEN ; system call for open
+        mov rdi, %1
+        mov rsi, 577 ; flags
+        mov rdx, 0644o ; mode. read and write
+        mov [%2], rax
+        syscall
 %endmacro
 
 %macro write 3:
