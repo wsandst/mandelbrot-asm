@@ -7,8 +7,8 @@
 %include "helpers.asm"
 
 ; Settings
-WIDTH equ 1500
-HEIGHT equ 1500
+WIDTH equ 800
+HEIGHT equ 800
 
 MAX_ITERATIONS equ 30
 
@@ -18,13 +18,15 @@ section   .data
         msg:  db        "Generated mandelbrot", 10
         msglen: equ $-msg
         newline: db 10
-        imageheader: db "P6", 10, "1500 1500", 10, "255", 10
+        imageheader: db "P6", 10, "800 800", 10, "255", 10
         imageheaderlen: equ $-imageheader
         outputfilename: db "output.ppm", 0
         outputfilenamelen: equ $-outputfilename
         image_array_ptr: dq 0
-        image_value: db 0
-        placeholder: db 255
+
+        pixel_red: db 0
+        pixel_green: db 0
+        pixel_blue: db 0
 
         image_widthf: dq 0
         image_heightf: dq 0
@@ -89,15 +91,17 @@ _generate_image:
                 call _calculate_pos
                 call _iterate_mandelbrot
 
-                ; Add color
+                ; Set pixel color in array
                 mov rax, [image_array_ptr]
-                mov bl, [image_value]
+                mov bl, [pixel_red]
                 mov byte [rax], bl
-                inc rax;
+                inc rax ; array ptr ++
+                mov bl, [pixel_green]
                 mov byte [rax], bl
-                inc rax;
+                inc rax ; array ptr ++
+                mov bl, [pixel_blue]
                 mov byte [rax], bl
-                inc rax;
+                inc rax ; array ptr ++
                 mov [image_array_ptr], rax
 
                 inc r12 ; x++
@@ -127,6 +131,14 @@ _calculate_pos: ; Convert x = r12, y = 13, into the proper mandelbrot range
 
         ret
                 
+%macro setcolor 3
+        mov bl, %1
+        mov [pixel_red], bl
+        mov bl, %2
+        mov [pixel_green], bl
+        mov bl, %3
+        mov [pixel_blue], bl
+%endmacro
 
 _iterate_mandelbrot:
         ; need floating point
@@ -164,6 +176,7 @@ _iterate_mandelbrot:
                 mulsd xmm0, xmm0 ; v^2 = v * v
                 movsd [v2], xmm0
 
+                ; 16 cutoff allows for smoother coloring
                 ; is u2 + v2 > 16? Then stop
                 pxor xmm0, xmm0 ; xmm0 = 0
                 addsd xmm0, [u2] ; + u2
@@ -177,10 +190,9 @@ _iterate_mandelbrot:
 
                 jmp iterateloop
         isinside:
-                mov rax, 0
-                mov [image_value], rax
+                setcolor 0, 0, 255
                 ret
         isoutside:
-                mov rax, 255
-                mov [image_value], rax
+                ; Calculate smooth i
+                setcolor 255, 0, 255
                 ret
