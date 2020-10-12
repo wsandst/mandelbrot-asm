@@ -7,28 +7,27 @@
 %include "helpers.asm"
 
 ; Settings
-WIDTH equ 300
-HEIGHT equ 300
+WIDTH equ 1500
+HEIGHT equ 1500
 
 MAX_ITERATIONS equ 30
+
 
 ; Main program
 section   .data
         msg:  db        "Generated mandelbrot", 10
         msglen: equ $-msg
         newline: db 10
-        imageheader: db "P6", 10, "300 300", 10, "255", 10
+        imageheader: db "P6", 10, "1500 1500", 10, "255", 10
         imageheaderlen: equ $-imageheader
         outputfilename: db "output.ppm", 0
         outputfilenamelen: equ $-outputfilename
-
-        image_array: TIMES WIDTH*HEIGHT*3 db 0
         image_array_ptr: dq 0
         image_value: db 0
         placeholder: db 255
 
-        image_widthf: dq 300.0
-        image_heightf: dq 300.0
+        image_widthf: dq 0
+        image_heightf: dq 0
         view_x: dq -2.25
         view_width: dq 3.0
         view_y: dq -1.5
@@ -45,9 +44,8 @@ section   .data
         c0: dq 0.0
 
 section .bss
-        imageArray resb 64*64*3
+        image_array resb WIDTH*HEIGHT*3
         filehandle resq 1
-
 
 section   .text
         global    _main
@@ -68,6 +66,14 @@ main:
         exit 0
 
 _generate_image:
+        ; Set up image_widthf and image_heightf
+        mov rax, WIDTH
+        cvtsi2sd xmm0, eax
+        movsd [image_widthf], xmm0
+        mov rax, HEIGHT
+        cvtsi2sd xmm0, eax
+        movsd [image_heightf], xmm0
+
         mov r12, 0 ; r12 = x
         mov r13, -1 ; r13 = y
         xor rax, rax
@@ -150,7 +156,6 @@ _iterate_mandelbrot:
                 addsd xmm0, [x] ; + x
                 movsd [u], xmm0
                 ; u^2
-                movsd xmm0, [u]
                 mulsd xmm0, xmm0 ; u^2 = u * u
                 movsd [u2], xmm0
 
