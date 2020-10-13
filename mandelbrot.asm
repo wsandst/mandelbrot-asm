@@ -13,7 +13,7 @@
 
 section   .data
         ; Settings loaded from settings.asm
-
+        
         msg:  db        "Mandelbrot generation complete.", 10
         msglen: equ $-msg
         newline: db 10
@@ -62,7 +62,6 @@ _start:
         write [filehandle], imageheader, imageheaderlen
         write [filehandle], image_array, WIDTH*HEIGHT*3
 
-        print "Mandelbrot generation complete.", msglen
         print msg, msglen
 
         exit 0

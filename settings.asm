@@ -7,7 +7,7 @@ MAX_ITERATIONS equ 30
 COLOR_ITERATION_LOOP equ 30
 
 section   .data
-    ; Change here for resolution   *********
+    ; Change resolution here too   *********
         imageheader: db "P6", 10, "1000 1000", 10, "255", 10
         imageheaderlen: equ $-imageheader
         outputfilename: db "output.ppm", 0

@@ -52,7 +52,7 @@ section .bss
 %endmacro
 
 ; open a file. <filename> <output_handle>
-%macro openfile 2:
+%macro openfile 2
         mov rax, SYS_OPEN ; system call for open
         mov rdi, %1
         mov rsi, 577 ; flags
@@ -62,7 +62,7 @@ section .bss
 %endmacro
 
 ; write an array of bytes to file. <filehandle> <arrayptr> <length>
-%macro write 3:
+%macro write 3
         mov       rax, SYS_WRITE
         mov       rdi, %1
         mov       rsi, %2
