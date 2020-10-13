@@ -7,19 +7,19 @@
 %include "helpers.asm"
 
 ; Settings
-WIDTH equ 800
-HEIGHT equ 800
+WIDTH equ 2000
+HEIGHT equ 2000
 
 MAX_ITERATIONS equ 30
 
-COLOR_ITERATION_LOOP equ 10
+COLOR_ITERATION_LOOP equ 30
 
 ; Main program
 section   .data
         msg:  db        "Generated mandelbrot", 10
         msglen: equ $-msg
         newline: db 10
-        imageheader: db "P6", 10, "800 800", 10, "255", 10
+        imageheader: db "P6", 10, "2000 2000", 10, "255", 10
         imageheaderlen: equ $-imageheader
         outputfilename: db "output.ppm", 0
         outputfilenamelen: equ $-outputfilename
@@ -31,21 +31,26 @@ section   .data
 
         image_widthf: dq 0
         image_heightf: dq 0
+
         view_x: dq -2.25
         view_width: dq 3.0
         view_y: dq -1.5
         view_height: dq 3.0
 
-        color_iteration_loopf: dq 10.0
+        color_iteration_loopf: dq 30.0
 
-        color1_red: dq 255.0
-        color1_green: dq 0.0
-        color1_blue: dq 0.0
+        color1_red: dq 39.0
+        color1_green: dq 160.0
+        color1_blue: dq 245.0
 
         color2_red: dq 0.0
         color2_green: dq 0.0
-        color2_blue: dq 255.0
+        color2_blue: dq 10.0
 
+        test_num: dq 153.0
+        log_result: dq 0
+
+        i: dq 0
 
         y: dq 0
         x: dq 0
@@ -57,6 +62,8 @@ section   .data
         c2: dq 2.0
         c0: dq 0.0
         c1: dq 1.0
+
+        log_res: dq 0
 
 section .bss
         image_array resb WIDTH*HEIGHT*3
@@ -155,10 +162,7 @@ _calculate_pos: ; Convert x = r12, y = 13, into the proper mandelbrot range
 
 %macro color_interpolate 1
         ; color = i / max_i * color1 +  1 - (i / maxi) * color2
-        ; calculations needed:
-        ; i / max_i
-        mov rax, %1
-        cvtsi2sd xmm0, eax ; convert i to float
+        movsd xmm0, %1
         divsd xmm0, [color_iteration_loopf] ; i = i / maxi
         movsd xmm2, xmm0
         movsd xmm1, [c1]
@@ -190,7 +194,6 @@ _calculate_pos: ; Convert x = r12, y = 13, into the proper mandelbrot range
         addsd xmm2, xmm3 ; add the interpolated colors
         cvttsd2si rax, xmm2 ; convert to integer
         mov [pixel_blue], al ; move into the pixel color byte
-
 %endmacro
 
 _iterate_mandelbrot:
@@ -238,7 +241,7 @@ _iterate_mandelbrot:
                 comisd xmm0, xmm1   
                 jae isoutside
 
-                cmp r11, MAX_ITERATIONS ; is the iteration count above MAX_ITERATIONS? Then stop
+                cmp r11, MAX_ITERATIONS ; is the iteration count >= MAX_ITERATIONS? Then stop
                 jge isinside
 
                 jmp iterateloop
@@ -246,15 +249,44 @@ _iterate_mandelbrot:
                 setcolor 0, 0, 0 ; black
                 ret
         isoutside:
-                ; Calculate smooth i
-                ;
                 ; i = i % color_iteration_loop
                 mov rax, r11
                 mov rcx, COLOR_ITERATION_LOOP
                 xor rdx,rdx ; clear rdx for correct remainder output
                 div rcx 
 
-                color_interpolate rdx ; interpolate with i % color_iteration_loop
+                ; calculate smooth i
+                ; smooth_i = i + 1 - log2(ln(sqrt(u2 + v2)))
+                mov rax, rdx ; rax = i
+                inc rax ; i++
+                inc rax;
+                mov [i], rax
+
+                ; calculate log2(ln(sqrt(u2 + v2)))
+                movsd xmm0, [u2] ; u2
+                addsd xmm0, [v2] ; + v2
+                sqrtsd xmm0, xmm0 ; sqrt
+                movsd [log_res], xmm0
+
+                ; calculate ln using x87
+                fldln2 ; st: log2(e)
+                fld qword [log_res]
+                fyl2x ; st: ln(num)
+                fstp qword [log_res] ; store to out and pop
+
+                ; calculate log2 using x87
+                fld1
+                fld qword [log_res]
+                fyl2x 
+                fstp qword [log_res]
+
+                mov rax, [i]
+                cvtsi2sd xmm0, eax ; convert i to float
+                movsd xmm1, [log_res]
+                subsd xmm0, xmm1
+                movsd [i], xmm0
+
+                color_interpolate [i] ; interpolate with i % color_iteration_loop
 
                 ; setcolor 255, 0, 255
                 ret
