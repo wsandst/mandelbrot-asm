@@ -18,8 +18,8 @@ section .bss
         syscall                           ; invoke operating system to do the write
 %endmacro
 
+; Print an integer to stdout
 %macro printInt 1
-; Prints the value of RAX as a base 10 number
     mov rax, %1
     mov r8, numberDigits
     mov r9, numberDigits ; Start of digit pointer
@@ -51,6 +51,7 @@ section .bss
         jge %%printDigits
 %endmacro
 
+; open a file. <filename> <output_handle>
 %macro openfile 2:
         mov rax, SYS_OPEN ; system call for open
         mov rdi, %1
@@ -60,6 +61,7 @@ section .bss
         syscall
 %endmacro
 
+; write an array of bytes to file. <filehandle> <arrayptr> <length>
 %macro write 3:
         mov       rax, SYS_WRITE
         mov       rdi, %1
