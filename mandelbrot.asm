@@ -12,6 +12,7 @@ HEIGHT equ 800
 
 MAX_ITERATIONS equ 30
 
+COLOR_ITERATION_LOOP equ 10
 
 ; Main program
 section   .data
@@ -35,6 +36,17 @@ section   .data
         view_y: dq -1.5
         view_height: dq 3.0
 
+        color_iteration_loopf: dq 10.0
+
+        color1_red: dq 255.0
+        color1_green: dq 0.0
+        color1_blue: dq 0.0
+
+        color2_red: dq 0.0
+        color2_green: dq 0.0
+        color2_blue: dq 255.0
+
+
         y: dq 0
         x: dq 0
         u: dq 0
@@ -44,6 +56,7 @@ section   .data
         c16: dq 16.0
         c2: dq 2.0
         c0: dq 0.0
+        c1: dq 1.0
 
 section .bss
         image_array resb WIDTH*HEIGHT*3
@@ -140,6 +153,46 @@ _calculate_pos: ; Convert x = r12, y = 13, into the proper mandelbrot range
         mov [pixel_blue], bl
 %endmacro
 
+%macro color_interpolate 1
+        ; color = i / max_i * color1 +  1 - (i / maxi) * color2
+        ; calculations needed:
+        ; i / max_i
+        mov rax, %1
+        cvtsi2sd xmm0, eax ; convert i to float
+        divsd xmm0, [color_iteration_loopf] ; i = i / maxi
+        movsd xmm2, xmm0
+        movsd xmm1, [c1]
+        subsd xmm1, xmm2 ; 1 - i
+
+        ; red
+        movsd xmm2, xmm0 ; xmm2 = i
+        movsd xmm3, xmm1 ; xmm3 = 1 - i
+        mulsd xmm2, [color1_red] ; i * color
+        mulsd xmm3, [color2_red] ; (i - 1) * color
+        addsd xmm2, xmm3 ; add the interpolated colors
+        cvttsd2si rax, xmm2 ; convert to integer
+        mov byte [pixel_red], al ; move into the pixel color byte
+
+        ; green
+        movsd xmm2, xmm0 ; xmm2 = i
+        movsd xmm3, xmm1 ; xmm3 = 1 - i
+        mulsd xmm2, [color1_green] ; i * color
+        mulsd xmm3, [color2_green] ; (i - 1) * color
+        addsd xmm2, xmm3 ; add the interpolated colors
+        cvttsd2si rax, xmm2 ; convert to integer
+        mov [pixel_green], al ; move into the pixel color byte
+
+        ; blue
+        movsd xmm2, xmm0 ; xmm2 = i
+        movsd xmm3, xmm1 ; xmm3 = 1 - i
+        mulsd xmm2, [color1_blue] ; i * color
+        mulsd xmm3, [color2_blue] ; (i - 1) * color
+        addsd xmm2, xmm3 ; add the interpolated colors
+        cvttsd2si rax, xmm2 ; convert to integer
+        mov [pixel_blue], al ; move into the pixel color byte
+
+%endmacro
+
 _iterate_mandelbrot:
         ; need floating point
         ; u, v, u2, v2, x, y
@@ -190,9 +243,18 @@ _iterate_mandelbrot:
 
                 jmp iterateloop
         isinside:
-                setcolor 0, 0, 255
+                setcolor 0, 0, 0 ; black
                 ret
         isoutside:
                 ; Calculate smooth i
-                setcolor 255, 0, 255
+                ;
+                ; i = i % color_iteration_loop
+                mov rax, r11
+                mov rcx, COLOR_ITERATION_LOOP
+                xor rdx,rdx ; clear rdx for correct remainder output
+                div rcx 
+
+                color_interpolate rdx ; interpolate with i % color_iteration_loop
+
+                ; setcolor 255, 0, 255
                 ret
