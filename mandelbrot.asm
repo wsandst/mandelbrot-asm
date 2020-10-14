@@ -27,6 +27,7 @@ section   .data
         image_widthf: dq 0
         image_heightf: dq 0
         color_iteration_loopf: dq 0.0
+        scale_factorf: dq 0.0
 
         y: dq 0
         x: dq 0
@@ -42,6 +43,8 @@ section   .data
         c2: dq 2.0
         c0: dq 0.0
         c1: dq 1.0
+        cdot5: dq 0.5 
+        cpi: dq 3.1415926535
 
 section .bss
         image_array resb WIDTH*HEIGHT*3
@@ -67,7 +70,7 @@ _start:
         exit 0
 
 _generate_image:
-        ; Set up image_widthf, image_heightf and color_iteration_loopf
+        ; Set up image_widthf, image_heightf,color_iteration_loopf and scale_factorf
         mov rax, WIDTH
         cvtsi2sd xmm0, eax
         movsd [image_widthf], xmm0
@@ -77,6 +80,13 @@ _generate_image:
         mov rax, COLOR_ITERATION_LOOP
         cvtsi2sd xmm0, eax
         movsd [color_iteration_loopf], xmm0
+        mov rax, COLOR_ITERATION_LOOP;
+        ; scale_factorf = PI / COLOR_ITERATION_LOOP
+        cvtsi2sd xmm1, eax
+        movsd xmm0, [cpi]
+        divsd xmm0, xmm1
+        movsd [scale_factorf], xmm0
+
 
         mov r12, 0 ; r12 = x
         mov r13, -1 ; r13 = y
@@ -144,10 +154,28 @@ _calculate_pos: ; Convert x = r12, y = 13, into the proper mandelbrot range poin
 %endmacro
 
 ; Convert a smoothed float i into a color
-%macro color_interpolate 1
-        ; color = i / max_i * color1 +  1 - (i / maxi) * color2
-        movsd xmm0, %1
-        divsd xmm0, [color_iteration_loopf] ; i = i / maxi
+_color_interpolate:
+        ; scale i between 0 and 1 using cosine
+        ; i = cos(i * scale_factor) * 0.5 + 0.5
+
+        ; i = i * scale_factor
+        movsd xmm0, [i]
+        mulsd xmm0, [scale_factorf]
+        movsd [i], xmm0
+
+        ; cos(i) using x87
+        fld qword [i]
+        fcos ; st cos(i)
+        fstp qword [i] ; store to out and pop
+
+        pxor xmm0, xmm0
+        movsd xmm0, [i]
+        mulsd xmm0, [cdot5] ; * 0.5
+        addsd xmm0, [cdot5] ; + 0.5
+        movsd [i], xmm0
+
+        ; color = i * color1 +  (1 - i) * color2
+        movsd xmm0, [i]
         movsd xmm2, xmm0
         movsd xmm1, [c1]
         subsd xmm1, xmm2 ; 1 - i
@@ -155,8 +183,8 @@ _calculate_pos: ; Convert x = r12, y = 13, into the proper mandelbrot range poin
         ; red
         movsd xmm2, xmm0 ; xmm2 = i
         movsd xmm3, xmm1 ; xmm3 = 1 - i
-        mulsd xmm2, [color1_red] ; i * color
-        mulsd xmm3, [color2_red] ; (i - 1) * color
+        mulsd xmm3, [color1_red] ; i * color
+        mulsd xmm2, [color2_red] ; (i - 1) * color
         addsd xmm2, xmm3 ; add the interpolated colors
         cvttsd2si rax, xmm2 ; convert to integer
         mov byte [pixel_red], al ; move into the pixel color byte
@@ -164,8 +192,8 @@ _calculate_pos: ; Convert x = r12, y = 13, into the proper mandelbrot range poin
         ; green
         movsd xmm2, xmm0 ; xmm2 = i
         movsd xmm3, xmm1 ; xmm3 = 1 - i
-        mulsd xmm2, [color1_green] ; i * color
-        mulsd xmm3, [color2_green] ; (i - 1) * color
+        mulsd xmm3, [color1_green] ; i * color
+        mulsd xmm2, [color2_green] ; (i - 1) * color
         addsd xmm2, xmm3 ; add the interpolated colors
         cvttsd2si rax, xmm2 ; convert to integer
         mov byte [pixel_green], al ; move into the pixel color byte
@@ -173,12 +201,12 @@ _calculate_pos: ; Convert x = r12, y = 13, into the proper mandelbrot range poin
         ; blue
         movsd xmm2, xmm0 ; xmm2 = i
         movsd xmm3, xmm1 ; xmm3 = 1 - i
-        mulsd xmm2, [color1_blue] ; i * color
-        mulsd xmm3, [color2_blue] ; (i - 1) * color
+        mulsd xmm3, [color1_blue] ; i * color
+        mulsd xmm2, [color2_blue] ; (i - 1) * color
         addsd xmm2, xmm3 ; add the interpolated colors
         cvttsd2si rax, xmm2 ; convert to integer
         mov byte [pixel_blue], al ; move into the pixel color byte
-%endmacro
+        ret
 
 ; Iterate mandelbrot for the point [x], [y]
 _iterate_mandelbrot:
@@ -233,17 +261,10 @@ _iterate_mandelbrot:
                 setcolor 0, 0, 0 ; black
                 ret
         isoutside:
-                ; i = i % color_iteration_loop
-                mov rax, r11
-                mov rcx, COLOR_ITERATION_LOOP
-                xor rdx,rdx ; clear rdx for correct remainder output
-                div rcx 
-
                 ; calculate smooth i
                 ; smooth_i = i + 1 - log2(ln(sqrt(u2 + v2)))
-                mov rax, rdx ; rax = i
+                mov rax, r11 ; rax = i
                 inc rax ; i++
-                inc rax;
                 mov [i], rax
 
                 ; calculate log2(ln(sqrt(u2 + v2)))
@@ -270,7 +291,7 @@ _iterate_mandelbrot:
                 subsd xmm0, xmm1
                 movsd [i], xmm0
 
-                color_interpolate [i] ; interpolate with i % color_iteration_loop
+                call _color_interpolate ; interpolate with i
 
                 ; setcolor 255, 0, 255
                 ret

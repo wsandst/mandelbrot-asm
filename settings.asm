@@ -4,7 +4,7 @@ WIDTH equ 1000
 HEIGHT equ 1000
 
 MAX_ITERATIONS equ 30
-COLOR_ITERATION_LOOP equ 30
+COLOR_ITERATION_LOOP equ 20
 
 section   .data
     ; Change resolution here too   *********
